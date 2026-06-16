@@ -64,6 +64,84 @@ def clean_text_for_pdf(text: str) -> str:
     # Codificar en latin-1 descartando caracteres no mapeables
     return text.encode('latin-1', 'replace').decode('latin-1')
 
+def parse_vtt(vtt_content: str) -> List[Dict[str, Any]]:
+    """Parsea un archivo VTT y retorna la transcripción en formato estructurado"""
+    transcript = []
+    pattern = r'(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{3})\s+-->\s+(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{3})'
+    
+    lines = vtt_content.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        match = re.match(pattern, line)
+        if match:
+            hours = int(match.group(1)) if match.group(1) else 0
+            minutes = int(match.group(2))
+            seconds = int(match.group(3))
+            ms = int(match.group(4))
+            start_sec = hours * 3600 + minutes * 60 + seconds + ms / 1000.0
+            
+            i += 1
+            text_lines = []
+            while i < len(lines) and lines[i].strip() != "" and not re.match(pattern, lines[i].strip()):
+                clean_line = re.sub(r'<[^>]+>', '', lines[i].strip())
+                if clean_line:
+                    text_lines.append(clean_line)
+                i += 1
+            
+            if text_lines:
+                transcript.append({
+                    'start': start_sec,
+                    'text': " ".join(text_lines)
+                })
+            continue
+        i += 1
+        
+    return transcript
+
+def get_transcript_via_ytdlp(video_id: str) -> List[Dict[str, Any]]:
+    """Descarga y parsea subtítulos/capturas usando yt-dlp como fallback"""
+    import tempfile
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    with tempfile.TemporaryDirectory() as tempdir:
+        ydl_opts = {
+            'skip_download': True,
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': ['es', 'en'],
+            'ignore_no_formats_error': True,
+            'outtmpl': os.path.join(tempdir, '%(id)s'),
+            'quiet': True,
+            'no_warnings': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+            
+        files = os.listdir(tempdir)
+        sub_file = None
+        for lang in ['es', 'en']:
+            for f in files:
+                if f.endswith(f".{lang}.vtt"):
+                    sub_file = f
+                    break
+            if sub_file:
+                break
+                
+        if not sub_file:
+            for f in files:
+                if f.endswith(".vtt"):
+                    sub_file = f
+                    break
+                    
+        if not sub_file:
+            raise Exception("No se encontraron subtítulos ni transcripciones disponibles para este video.")
+            
+        filepath = os.path.join(tempdir, sub_file)
+        with open(filepath, "r", encoding="utf-8") as f:
+            vtt_content = f.read()
+            
+        return parse_vtt(vtt_content)
+
 def generate_markdown(video_id: str, title: str, url: str, transcript: List[Dict[str, Any]]) -> str:
     """Genera archivo Markdown y retorna su ruta"""
     filename = sanitize_filename(f"{title}_{video_id}") + ".md"
@@ -195,8 +273,9 @@ async def process_youtube_url(
         title = get_video_title(video_url, video_id)
         
         # 2. Descargar transcripción (idioma preferido: español, luego inglés)
-        yt_api = YouTubeTranscriptApi()
+        transcript = None
         try:
+            yt_api = YouTubeTranscriptApi()
             transcript_list = yt_api.list(video_id)
             try:
                 # Buscar español o inglés
@@ -215,10 +294,15 @@ async def process_youtube_url(
         except Exception as api_err:
             # Fallback secundario directo si falla la lista
             try:
+                yt_api = YouTubeTranscriptApi()
                 fetched = yt_api.fetch(video_id)
                 transcript = fetched.to_raw_data()
             except Exception:
-                raise Exception("No se encontraron subtítulos ni transcripciones disponibles para este video.")
+                # Fallback terciario con yt-dlp
+                try:
+                    transcript = get_transcript_via_ytdlp(video_id)
+                except Exception as ytdlp_err:
+                    raise Exception("No se encontraron subtítulos ni transcripciones disponibles para este video.")
 
         if not transcript:
             raise Exception("No se pudo recuperar ninguna transcripción para este video.")

@@ -20,13 +20,24 @@ echo "[+] Directorio actual: $(pwd)"
 APP_DIR="/opt/herramientas-it"
 DB_NAME="herramientas_it"
 DB_USER="it_user"
-# Generar contraseña de base de datos aleatoria
-DB_PASS=$(openssl rand -hex 16)
-# Generar clave secreta aleatoria para JWT
-SECRET_KEY=$(openssl rand -hex 32)
+
+# Cargar configuraciones existentes si existen para evitar romper la contraseña de la BD
+if [ -f "$APP_DIR/.env" ]; then
+  echo "[+] .env existente detectado. Cargando parámetros..."
+  DB_PASS=$(grep '^DATABASE_URL=' "$APP_DIR/.env" | sed -E 's|DATABASE_URL=postgresql://[^:]+:([^@]+)@.*|\1|' || echo "")
+  SECRET_KEY=$(grep '^SECRET_KEY=' "$APP_DIR/.env" | cut -d'=' -f2- || echo "")
+fi
+
+# Si no se encontraron, generar nuevos
+if [ -z "$DB_PASS" ]; then
+  DB_PASS=$(openssl rand -hex 16)
+fi
+if [ -z "$SECRET_KEY" ]; then
+  SECRET_KEY=$(openssl rand -hex 32)
+fi
 
 echo "--------------------------------------------------"
-echo "Configuración generada:"
+echo "Configuración cargada/generada:"
 echo " - Directorio de Instalación: $APP_DIR"
 echo " - Base de Datos: $DB_NAME"
 echo " - Usuario DB: $DB_USER"
@@ -72,16 +83,19 @@ venv/bin/pip install -r requirements.txt
 
 # 5. Configurar archivo .env
 echo "[+] 5. Creando archivo de variables de entorno (.env)..."
-cat <<EOF > .env
+if [ -f .env ]; then
+  echo "[+] El archivo .env ya existe. No se sobrescribirá para preservar configuraciones y claves existentes."
+else
+  cat <<EOF > .env
 DATABASE_URL=postgresql://$DB_USER:$DB_PASS@localhost/$DB_NAME
 SECRET_KEY=$SECRET_KEY
 SESSION_EXPIRE_MINUTES=1440
 # Reemplace esta clave vacía con su API Key de Google Gemini en producción
 GEMINI_API_KEY=
 EOF
-
-chmod 600 .env
-echo "[+] Archivo .env configurado correctamente en $APP_DIR/.env"
+  chmod 600 .env
+  echo "[+] Archivo .env configurado correctamente en $APP_DIR/.env"
+fi
 
 # 6. Sembrar la base de datos (crear tablas y usuarios por defecto)
 echo "[+] 6. Inicializando base de datos y cargando semilla de usuarios..."
