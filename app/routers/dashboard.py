@@ -4,6 +4,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import httpx
 import datetime
+import socket
+import subprocess
+import platform
+from sqlalchemy import text
 from typing import Optional
 
 from app.config import settings
@@ -52,8 +56,64 @@ def get_weather_desc(code: int) -> tuple[str, str]:
     }
     return mapping.get(code, ("Desconocido", "fa-question-circle text-gray-400"))
 
+def check_service_port(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        socket.setdefaulttimeout(timeout)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, port))
+        s.close()
+        return True
+    except Exception:
+        return False
+
+def get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+def get_gateway_ip() -> str:
+    try:
+        with open("/proc/net/route") as fh:
+            for line in fh:
+                fields = line.strip().split()
+                if len(fields) > 2 and fields[1] == '00000000':
+                    gw_hex = fields[2]
+                    parts = [int(gw_hex[i:i+2], 16) for i in range(0, 8, 2)]
+                    parts.reverse()
+                    return ".".join(map(str, parts))
+    except Exception:
+        pass
+    return "192.168.2.1"
+
+def ping_ip(ip: str) -> bool:
+    try:
+        cmd = ["ping", "-n", "1", "-w", "1000", ip] if platform.system() == "Windows" else ["ping", "-c", "1", "-W", "1", ip]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+def check_internet() -> bool:
+    return check_service_port("8.8.8.8", 53, timeout=1.0)
+
+def check_db(db: Session) -> bool:
+    try:
+        db.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
 @router.get("/", response_class=HTMLResponse)
-async def get_root(request: Request, current_user: User = Depends(get_current_user)):
+async def get_root(
+    request: Request, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Redirige al dashboard o renderiza la vista principal directamente"""
     # Obtenemos la fecha y hora formateada en español
     now = datetime.datetime.now()
@@ -68,6 +128,16 @@ async def get_root(request: Request, current_user: User = Depends(get_current_us
     fecha_formateada = f"{dias[now.weekday()]}, {now.day} de {meses[now.month - 1]} de {now.year}"
     hora_formateada = now.strftime("%H:%M")
 
+    # Diagnóstico de red e infraestructura
+    gw_ip = get_gateway_ip()
+    net_status = {
+        "local_ip": get_local_ip(),
+        "gateway_ip": gw_ip,
+        "gateway_online": ping_ip(gw_ip),
+        "internet": check_internet(),
+        "db": check_db(db)
+    }
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -76,7 +146,8 @@ async def get_root(request: Request, current_user: User = Depends(get_current_us
             "fecha": fecha_formateada,
             "hora": hora_formateada,
             "phpipam_url": settings.PHPIPAM_URL,
-            "safweb_url": settings.SAFWEB_URL
+            "safweb_url": settings.SAFWEB_URL,
+            "net_status": net_status
         }
     )
 
