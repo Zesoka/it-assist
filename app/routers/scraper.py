@@ -108,7 +108,7 @@ def get_transcript_via_ytdlp(video_id: str) -> List[Dict[str, Any]]:
             'skip_download': True,
             'writesubtitles': True,
             'writeautomaticsub': True,
-            'subtitleslangs': ['es', 'en'],
+            'subtitleslangs': ['es.*', 'en.*'],
             'ignore_no_formats_error': True,
             'ignoreerrors': True,
             'outtmpl': os.path.join(tempdir, '%(id)s'),
@@ -122,7 +122,7 @@ def get_transcript_via_ytdlp(video_id: str) -> List[Dict[str, Any]]:
         sub_file = None
         for lang in ['es', 'en']:
             for f in files:
-                if f.endswith(f".{lang}.vtt"):
+                if re.search(rf"\.{lang}(-[a-zA-Z0-9]+)?\.vtt$", f):
                     sub_file = f
                     break
             if sub_file:
