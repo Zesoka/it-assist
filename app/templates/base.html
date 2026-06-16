@@ -88,31 +88,31 @@
                 </a>
             </div>
             
-            <!-- Cuerpo / Navegación (Flexbox para distribuir el espacio verticalmente desde el subtítulo hasta el final) -->
-            <div class="flex-1 flex flex-col justify-between p-4 overflow-y-auto min-h-0">
-                <a href="/" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path == '/' %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                    <i class="fa-solid fa-chart-pie text-xl w-6 text-center"></i>
+            <!-- Cuerpo / Navegación (Diseño compacto y agrupado) -->
+            <div class="flex-1 flex flex-col justify-start p-4 overflow-y-auto min-h-0 gap-1.5">
+                <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 {% if request.url.path == '/' %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                    <i class="fa-solid fa-chart-pie text-lg w-5 text-center"></i>
                     <span>Dashboard</span>
                 </a>
                 
-                <a href="/scraper" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/scraper') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                    <i class="fa-solid fa-wand-magic-sparkles text-xl w-6 text-center"></i>
+                <a href="/scraper" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 {% if request.url.path.startswith('/scraper') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                    <i class="fa-solid fa-wand-magic-sparkles text-lg w-5 text-center"></i>
                     <span>Transcripción YouTube</span>
                 </a>
                 
-                <a href="/chat" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/chat') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                    <i class="fa-solid fa-robot text-xl w-6 text-center"></i>
+                <a href="/chat" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 {% if request.url.path.startswith('/chat') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                    <i class="fa-solid fa-robot text-lg w-5 text-center"></i>
                     <span>Agente IA IT</span>
                 </a>
                 
-                <!-- Grupo Inferior: Administración (Espaciado verticalmente al final) -->
+                <!-- Grupo Inferior: Administración (Sección compacta agrupada a continuación) -->
                 {% if user.role == 'admin' %}
-                <div class="pt-2 pb-2 shrink-0">
-                    <div class="pb-2 px-4">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Administración</span>
+                <div class="mt-6 pt-4 border-t border-slate-100 shrink-0">
+                    <div class="pb-1.5 px-3">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Administración</span>
                     </div>
-                    <a href="/admin" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/admin') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                        <i class="fa-solid fa-users-gear text-xl w-6 text-center"></i>
+                    <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 {% if request.url.path.startswith('/admin') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                        <i class="fa-solid fa-users-gear text-lg w-5 text-center"></i>
                         <span>Gestionar Técnicos</span>
                     </a>
                 </div>
