@@ -23,6 +23,7 @@ async def get_admin_dashboard(
         "admin_crud.html",
         {
             "request": request,
+            "user": current_admin,
             "admin_user": current_admin,
             "users": users
         }
@@ -48,7 +49,12 @@ async def create_user(
         users = db.query(User).order_by(User.id.asc()).all()
         return templates.TemplateResponse(
             "partials/user_table_body.html",
-            {"request": request, "users": users, "error": "Todos los campos son obligatorios."}
+            {
+                "request": request,
+                "users": users,
+                "admin_user": current_admin,
+                "error": "Todos los campos son obligatorios."
+            }
         )
 
     # Validar si el usuario ya existe
@@ -57,7 +63,12 @@ async def create_user(
         users = db.query(User).order_by(User.id.asc()).all()
         return templates.TemplateResponse(
             "partials/user_table_body.html",
-            {"request": request, "users": users, "error": "El nombre de usuario ya está registrado."}
+            {
+                "request": request,
+                "users": users,
+                "admin_user": current_admin,
+                "error": "El nombre de usuario ya está registrado."
+            }
         )
 
     # Crear el usuario
@@ -77,7 +88,12 @@ async def create_user(
     users = db.query(User).order_by(User.id.asc()).all()
     return templates.TemplateResponse(
         "partials/user_table_body.html",
-        {"request": request, "users": users, "success": f"Usuario {new_user.username} creado correctamente."}
+        {
+            "request": request,
+            "users": users,
+            "admin_user": current_admin,
+            "success": f"Usuario {new_user.username} creado correctamente."
+        }
     )
 
 @router.get("/users/{user_id}/edit", response_class=HTMLResponse)
@@ -130,7 +146,12 @@ async def edit_user(
     users = db.query(User).order_by(User.id.asc()).all()
     return templates.TemplateResponse(
         "partials/user_table_body.html",
-        {"request": request, "users": users, "success": f"Usuario {user.username} modificado correctamente."}
+        {
+            "request": request,
+            "users": users,
+            "admin_user": current_admin,
+            "success": f"Usuario {user.username} modificado correctamente."
+        }
     )
 
 @router.delete("/users/{user_id}")
