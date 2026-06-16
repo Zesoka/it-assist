@@ -75,40 +75,39 @@
         
         <!-- Sidebar -->
         <aside class="w-72 bg-white border-r border-slate-100 flex flex-col justify-between shrink-0 custom-shadow">
-            <!-- Logotipo / Cabecera (Diseño vertical de gran tamaño) -->
-            <div class="px-4 py-6 border-b border-slate-100 bg-brand-50/20 flex flex-col items-center text-center gap-4 shrink-0">
-                <div class="w-24 h-24 bg-brand-600 rounded-3xl flex items-center justify-center text-white shadow-lg shadow-brand-500/25 shrink-0">
-                    <i class="fa-solid fa-laptop-medical text-5xl"></i>
-                </div>
-                <div class="min-w-0 w-full">
-                    <span class="font-black text-slate-900 text-4xl tracking-tight block leading-none whitespace-nowrap">Soporte IT</span>
-                    <span class="text-xs font-black uppercase tracking-wider mt-2.5 block leading-none whitespace-nowrap text-slate-400">Plataforma de Asistencia Técnica</span>
-                </div>
+            <!-- Logotipo / Cabecera (Encuadrado en un recuadro tipo botón presionable) -->
+            <div class="p-4 border-b border-slate-100 bg-slate-50/30 shrink-0">
+                <a href="/" class="flex flex-col items-center text-center gap-3 p-4 bg-white border border-slate-200/80 rounded-2xl hover:bg-slate-50 hover:border-brand-300 hover:shadow-md active:scale-[0.98] transition-all duration-200 block group">
+                    <div class="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-md shadow-brand-500/25 group-hover:scale-105 transition-transform duration-200">
+                        <i class="fa-solid fa-laptop-medical text-3xl"></i>
+                    </div>
+                    <div class="min-w-0 w-full">
+                        <span class="font-extrabold text-slate-900 text-xl tracking-tight block leading-none group-hover:text-brand-600 transition-colors duration-200">Soporte IT</span>
+                        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1.5 block leading-none">Plataforma de Asistencia Técnica</span>
+                    </div>
+                </a>
             </div>
             
-            <!-- Cuerpo / Navegación (Flexbox para distribuir el espacio verticalmente) -->
-            <div class="flex-1 flex flex-col justify-start p-4 overflow-y-auto">
-                <!-- Grupo Superior: Dashboard, Scraper, Chat (Espaciado equitativo de h-[270px]) -->
-                <div class="flex flex-col justify-between h-[270px] shrink-0">
-                    <a href="/" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path == '/' %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                        <i class="fa-solid fa-chart-pie text-xl w-6 text-center"></i>
-                        <span>Dashboard</span>
-                    </a>
-                    
-                    <a href="/scraper" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/scraper') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                        <i class="fa-solid fa-wand-magic-sparkles text-xl w-6 text-center"></i>
-                        <span>Transcripción YouTube</span>
-                    </a>
-                    
-                    <a href="/chat" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/chat') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
-                        <i class="fa-solid fa-robot text-xl w-6 text-center"></i>
-                        <span>Agente IA IT</span>
-                    </a>
-                </div>
+            <!-- Cuerpo / Navegación (Flexbox para distribuir el espacio verticalmente desde el subtítulo hasta el final) -->
+            <div class="flex-1 flex flex-col justify-between p-4 overflow-y-auto min-h-0">
+                <a href="/" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path == '/' %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                    <i class="fa-solid fa-chart-pie text-xl w-6 text-center"></i>
+                    <span>Dashboard</span>
+                </a>
                 
-                <!-- Grupo Inferior: Administración (Desplazado un poco más arriba para evitar scrolling) -->
+                <a href="/scraper" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/scraper') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                    <i class="fa-solid fa-wand-magic-sparkles text-xl w-6 text-center"></i>
+                    <span>Transcripción YouTube</span>
+                </a>
+                
+                <a href="/chat" class="flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/chat') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                    <i class="fa-solid fa-robot text-xl w-6 text-center"></i>
+                    <span>Agente IA IT</span>
+                </a>
+                
+                <!-- Grupo Inferior: Administración (Espaciado verticalmente al final) -->
                 {% if user.role == 'admin' %}
-                <div class="pt-6 pb-2 shrink-0">
+                <div class="pt-2 pb-2 shrink-0">
                     <div class="pb-2 px-4">
                         <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Administración</span>
                     </div>
