@@ -302,7 +302,7 @@ async def process_youtube_url(
                 try:
                     transcript = get_transcript_via_ytdlp(video_id)
                 except Exception as ytdlp_err:
-                    raise Exception("No se encontraron subtítulos ni transcripciones disponibles para este video.")
+                    raise Exception(f"Fallo en youtube-transcript-api (error: {str(api_err)}) y en yt-dlp (error: {str(ytdlp_err)})")
 
         if not transcript:
             raise Exception("No se pudo recuperar ninguna transcripción para este video.")
