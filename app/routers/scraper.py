@@ -110,6 +110,7 @@ def get_transcript_via_ytdlp(video_id: str) -> List[Dict[str, Any]]:
             'writeautomaticsub': True,
             'subtitleslangs': ['es', 'en'],
             'ignore_no_formats_error': True,
+            'ignoreerrors': True,
             'outtmpl': os.path.join(tempdir, '%(id)s'),
             'quiet': True,
             'no_warnings': True,
@@ -275,8 +276,14 @@ async def process_youtube_url(
         # 2. Descargar transcripción (idioma preferido: español, luego inglés)
         transcript = None
         try:
-            yt_api = YouTubeTranscriptApi()
-            transcript_list = yt_api.list(video_id)
+            try:
+                # API moderna (versión >= 0.6.2, requiere instanciación)
+                yt_api = YouTubeTranscriptApi()
+                transcript_list = yt_api.list(video_id)
+            except AttributeError:
+                # API antigua (versión < 0.6.2, métodos estáticos)
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                
             try:
                 # Buscar español o inglés
                 transcript_obj = transcript_list.find_transcript(['es', 'en'])
@@ -294,10 +301,17 @@ async def process_youtube_url(
         except Exception as api_err:
             # Fallback secundario directo si falla la lista
             try:
-                yt_api = YouTubeTranscriptApi()
-                fetched = yt_api.fetch(video_id)
-                transcript = fetched.to_raw_data()
-            except Exception:
+                try:
+                    yt_api = YouTubeTranscriptApi()
+                    fetched = yt_api.fetch(video_id)
+                except AttributeError:
+                    fetched = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'en'])
+                
+                if isinstance(fetched, list):
+                    transcript = fetched
+                else:
+                    transcript = fetched.to_raw_data()
+            except Exception as api_err2:
                 # Fallback terciario con yt-dlp
                 try:
                     transcript = get_transcript_via_ytdlp(video_id)
