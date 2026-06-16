@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Transcripción de YouTube{% endblock %}
+{% block header_title %}Módulo de Transcripción de YouTube{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Estilos para el indicador de carga de HTMX */
+    .htmx-indicator {
+        display: none !important;
+    }
+    .htmx-request .htmx-indicator,
+    .htmx-request.htmx-indicator {
+        display: flex !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+    
+    <!-- Introducción y Formulario de Scraping -->
+    <div class="bg-white border border-slate-100 rounded-2xl p-6 custom-shadow">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-lg">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-slate-900">Extractor de Transcripciones</h3>
+                <p class="text-xs text-slate-500 font-medium">Soporta enlaces de YouTube completos, cortos o de reproducción.</p>
+            </div>
+        </div>
+
+        <form 
+            hx-post="/scraper/process" 
+            hx-target="#scraper-results-container" 
+            hx-swap="innerHTML"
+            hx-indicator="#loading-indicator"
+            class="space-y-4"
+        >
+            <div>
+                <label for="video_url" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Enlace del Video de YouTube</label>
+                <div class="flex flex-col md:flex-row gap-3">
+                    <div class="relative flex-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-brands fa-youtube text-lg"></i>
+                        </div>
+                        <input 
+                            type="url" 
+                            id="video_url" 
+                            name="video_url" 
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            required
+                            class="block w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition-all duration-150"
+                        >
+                    </div>
+                    <button 
+                        type="submit" 
+                        class="px-6 py-3 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-semibold text-sm rounded-xl transition-colors duration-150 flex items-center justify-center gap-2 hover:scale-[1.01]"
+                    >
+                        <span>Procesar Video</span>
+                        <i class="fa-solid fa-gears"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Indicador de Carga Asíncrono de HTMX -->
+    <div id="loading-indicator" class="htmx-indicator p-8 bg-white border border-slate-100 rounded-2xl custom-shadow flex-col items-center justify-center space-y-4 text-center">
+        <!-- Rueda de Progreso Animada -->
+        <div class="relative w-12 h-12 flex items-center justify-center">
+            <div class="absolute w-12 h-12 border-4 border-brand-100 rounded-full"></div>
+            <div class="absolute w-12 h-12 border-4 border-t-brand-600 rounded-full animate-spin"></div>
+        </div>
+        <div>
+            <span class="block text-sm font-bold text-slate-800">Descargando subtítulos y generando reportes...</span>
+            <span class="block text-xs text-slate-400 mt-1">Este proceso no bloquea la interfaz. Puedes seguir usando el sistema.</span>
+        </div>
+    </div>
+
+    <!-- Contenedor de Resultados (Recibe el fragmento de scraper_results.html) -->
+    <div id="scraper-results-container"></div>
+
+</div>
+{% endblock %}

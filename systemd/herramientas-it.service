@@ -1,0 +1,16 @@
+[Unit]
+Description=Servidor Gunicorn con Uvicorn para Herramientas IT del Sanatorio
+After=network.target postgresql.service
+
+[Service]
+User=root
+WorkingDirectory=/opt/herramientas-it
+EnvironmentFile=/opt/herramientas-it/.env
+ExecStart=/opt/herramientas-it/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

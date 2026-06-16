@@ -1,0 +1,40 @@
+# Entornos virtuales de Python
+venv/
+.venv/
+env/
+ENV/
+
+# Base de datos local de desarrollo (SQLite)
+it_tools.db
+*.db
+*.sqlite3
+
+# Variables de entorno y secretos de configuración (¡CRÍTICO!)
+.env
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Archivos temporales del sistema y editores
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*~
+.DS_Store
+
+# Archivos generados temporalmente por el Scraper en el servidor
+app/static/downloads/
+*.pdf
+*.docx
+*.md
+!walkthrough.md
+!implementation_plan.md
+!task.md

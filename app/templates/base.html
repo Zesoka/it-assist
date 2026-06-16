@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Panel de Soporte Técnico{% endblock %} - Infraestructura IT </title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome para Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <!-- Tailwind CSS (v3 CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            200: '#bbdffd',
+                            300: '#7ec4fc',
+                            400: '#3aa2f8',
+                            500: '#1083e7',
+                            600: '#0365c4',
+                            700: '#04519f',
+                            800: '#074583',
+                            900: '#0c3b6d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- HTMX (v1.9.12) -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    
+    <style>
+        /* Personalización fina del scrollbar y estética general */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        .custom-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+
+    {% if user %}
+    <!-- Layout con Sidebar para usuarios autenticados -->
+    <div class="flex min-h-screen">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white border-r border-slate-100 flex flex-col justify-between shrink-0 custom-shadow">
+            <!-- Logotipo / Cabecera (Diseño Vertical Centrado con Icono Grande) -->
+            <div class="p-6 border-b border-slate-100 bg-brand-50/20 flex flex-col items-center text-center shrink-0">
+                <div class="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-500/25 mb-3 animate-in fade-in duration-200">
+                    <i class="fa-solid fa-laptop-medical text-3xl"></i>
+                </div>
+                <div>
+                    <span class="font-extrabold text-slate-900 text-2xl tracking-tight block">Soporte IT</span>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5 block leading-relaxed">Plataforma de asistencia técnica</span>
+                </div>
+            </div>
+            
+            <!-- Cuerpo / Navegación (Centrado verticalmente en el espacio disponible) -->
+            <div class="flex-1 flex flex-col justify-center p-4 shrink-0">
+                <nav class="space-y-2">
+                    <a href="/" class="flex items-center gap-4 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path == '/' %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                        <i class="fa-solid fa-chart-pie text-xl w-6 text-center"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    
+                    <a href="/scraper" class="flex items-center gap-4 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/scraper') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                        <i class="fa-solid fa-wand-magic-sparkles text-xl w-6 text-center"></i>
+                        <span>Transcripción YouTube</span>
+                    </a>
+                    
+                    <a href="/chat" class="flex items-center gap-4 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/chat') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                        <i class="fa-solid fa-robot text-xl w-6 text-center"></i>
+                        <span>Agente IA IT</span>
+                    </a>
+                    
+                    {% if user.role == 'admin' %}
+                    <div class="pt-6 pb-2 px-4">
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Administración</span>
+                    </div>
+                    <a href="/admin" class="flex items-center gap-4 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-200 {% if request.url.path.startswith('/admin') %} bg-brand-50 text-brand-600 {% else %} text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% endif %}">
+                        <i class="fa-solid fa-users-gear text-xl w-6 text-center"></i>
+                        <span>Gestionar Técnicos</span>
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+            
+            <!-- Pie de Sidebar - Perfil de Usuario -->
+            <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold border border-slate-300">
+                        {{ user.full_name[:2].upper() }}
+                    </div>
+                    <div class="overflow-hidden">
+                        <span class="font-semibold text-slate-900 text-sm block truncate">{{ user.full_name }}</span>
+                        <span class="text-xs text-slate-500 font-medium capitalize block">{{ user.role }}</span>
+                    </div>
+                </div>
+                <a href="/logout" class="flex items-center justify-center gap-2 w-full px-4 py-2 bg-rose-50 text-rose-600 text-xs font-semibold rounded-xl hover:bg-rose-100 transition-colors duration-200">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Cerrar Sesión</span>
+                </a>
+            </div>
+        </aside>
+        
+        <!-- Contenedor de Contenido Principal -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Barra Superior (Top Header) -->
+            <header class="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 custom-shadow">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">
+                        {% block header_title %}Inicio{% endblock %}
+                    </h2>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
+                        <i class="fa-solid fa-network-wired text-brand-500 mr-1"></i> Intranet Corporativa
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Vista General -->
+            <main class="flex-1 p-8 overflow-y-auto">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+        
+    </div>
+    {% else %}
+    <!-- Vista limpia sin sidebar (Login, etc.) -->
+    <main class="min-h-screen flex flex-col items-center justify-center p-4">
+        {% block clean_content %}{% endblock %}
+    </main>
+    {% endif %}
+
+</body>
+</html>

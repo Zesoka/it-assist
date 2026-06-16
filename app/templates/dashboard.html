@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Principal{% endblock %}
+{% block header_title %}Panel Principal{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    
+    <!-- Banner de Bienvenida -->
+    <div class="bg-gradient-to-r from-brand-600 to-brand-800 rounded-2xl p-8 text-white custom-shadow relative overflow-hidden">
+        <!-- Decoraciones circulares ligeras de fondo -->
+        <div class="absolute right-0 bottom-0 w-80 h-80 bg-white/5 rounded-full translate-x-1/4 translate-y-1/4 pointer-events-none"></div>
+        <div class="absolute right-10 top-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/3 pointer-events-none"></div>
+
+        <div class="relative z-10 space-y-2">
+            <span class="text-xs font-bold uppercase tracking-widest text-brand-200">Plataforma Interna de Soporte</span>
+            <h1 class="text-3xl font-extrabold tracking-tight">¡Hola, {{ user.full_name }}!</h1>
+            <p class="text-sm text-brand-100 font-medium">
+                Te damos la bienvenida al panel central de Infraestructura del Sanatorio.
+            </p>
+            
+            <div class="pt-4 flex flex-wrap items-center gap-4 text-xs font-semibold text-brand-100/90 border-t border-white/10 mt-6">
+                <div>
+                    <i class="fa-regular fa-calendar-days mr-1.5 text-brand-200"></i> {{ fecha }}
+                </div>
+                <div class="w-1.5 h-1.5 bg-brand-300 rounded-full"></div>
+                <div>
+                    <i class="fa-regular fa-clock mr-1.5 text-brand-200"></i> {{ hora }} hs
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila de Widgets (Clima y Ubicación) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Widget del Clima (Cargado dinámicamente vía HTMX) -->
+        <div 
+            hx-get="/dashboard/weather" 
+            hx-trigger="load" 
+            hx-swap="outerHTML"
+            class="lg:col-span-1 bg-white border border-slate-100 rounded-2xl p-6 custom-shadow flex flex-col justify-center min-h-[160px]"
+        >
+            <!-- Skeleton Loader mientras se carga el clima -->
+            <div class="animate-pulse space-y-4">
+                <div class="flex justify-between items-center">
+                    <div class="h-4 bg-slate-200 rounded w-1/3"></div>
+                    <div class="h-8 bg-slate-200 rounded-full w-8"></div>
+                </div>
+                <div class="h-8 bg-slate-200 rounded w-1/4"></div>
+                <div class="space-y-2">
+                    <div class="h-3 bg-slate-200 rounded w-5/6"></div>
+                    <div class="h-3 bg-slate-200 rounded w-2/3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjeta Informativa de Conectividad -->
+        <div class="bg-white border border-slate-100 rounded-2xl p-6 custom-shadow flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado de Red</span>
+                <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full border border-emerald-100 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> Operacional
+                </span>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-slate-800">Servidores de Producción</h3>
+                <p class="text-xs text-slate-500 mt-1">Conectado localmente en Proxmox LXC. Firewall UFW configurado.</p>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-semibold">
+                <span>IP Servidor:</span>
+                <span class="font-mono text-slate-700">127.0.0.1 (LXC)</span>
+            </div>
+        </div>
+
+        <!-- Tarjeta Informativa de Enlaces Rápidos a Herramientas -->
+        <div class="bg-white border border-slate-100 rounded-2xl p-6 custom-shadow flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Enlaces Rápidos IT</span>
+                <span class="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded-md uppercase">
+                    Intranet
+                </span>
+            </div>
+            <div class="space-y-3">
+                <h3 class="text-base font-bold text-slate-800">Herramientas Externas</h3>
+                <div class="grid grid-cols-2 gap-3 mt-2">
+                    <!-- Enlace a phpIPAM -->
+                    <a 
+                        href="{{ phpipam_url }}" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        class="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/60 hover:border-indigo-200 rounded-xl transition-all duration-150 group"
+                    >
+                        <div class="w-10 h-10 bg-indigo-50 group-hover:bg-indigo-100/80 rounded-xl flex items-center justify-center text-indigo-600 mb-2 transition-colors">
+                            <i class="fa-solid fa-network-wired text-lg"></i>
+                        </div>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-indigo-900 transition-colors">phpIPAM</span>
+                        <span class="text-[9px] text-slate-400 font-bold mt-0.5">Gestión IPs</span>
+                    </a>
+                    
+                    <!-- Enlace a SAF Web -->
+                    <a 
+                        href="{{ safweb_url }}" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        class="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200/60 hover:border-emerald-200 rounded-xl transition-all duration-150 group"
+                    >
+                        <div class="w-10 h-10 bg-emerald-50 group-hover:bg-emerald-100/80 rounded-xl flex items-center justify-center text-emerald-600 mb-2 transition-colors">
+                            <i class="fa-solid fa-file-invoice-dollar text-lg"></i>
+                        </div>
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-emerald-900 transition-colors">SAF Web</span>
+                        <span class="text-[9px] text-slate-400 font-bold mt-0.5">Facturación</span>
+                    </a>
+                </div>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>Acceso con Credenciales</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Secciones / Módulos de Herramientas -->
+    <div>
+        <h2 class="text-lg font-extrabold text-slate-900 mb-6">Módulos de Herramientas IT</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Tarjeta Módulo 1: Scraper de YouTube -->
+            <div class="bg-white border border-slate-100 rounded-2xl p-6 custom-shadow hover:scale-[1.01] transition-transform duration-200 flex flex-col justify-between">
+                <div class="space-y-4">
+                    <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center text-xl shadow-inner">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Transcripción de YouTube</h3>
+                        <p class="text-sm text-slate-500 mt-2 leading-relaxed">
+                            Extrae subtítulos completos de videos tutoriales o conferencias de YouTube sin descargarlos. Genera automáticamente versiones en formatos Markdown (.md), PDF (.pdf) y Microsoft Word (.docx).
+                        </p>
+                    </div>
+                </div>
+                <div class="mt-8 pt-4 border-t border-slate-100">
+                    <a 
+                        href="/scraper" 
+                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors duration-150"
+                    >
+                        <span>Abrir Scraper</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Tarjeta Módulo 2: Agente de IA IT -->
+            <div class="bg-white border border-slate-100 rounded-2xl p-6 custom-shadow hover:scale-[1.01] transition-transform duration-200 flex flex-col justify-between">
+                <div class="space-y-4">
+                    <div class="w-12 h-12 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center text-xl shadow-inner">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Agente de IA de Soporte IT</h3>
+                        <p class="text-sm text-slate-500 mt-2 leading-relaxed">
+                            Asistente virtual conversacional conectado a Google Gemini. Entrenado con un prompt específico para virtualización (Proxmox), redes (UniFi/Aruba), firewalls (FortiGate) y linux sysadmin.
+                        </p>
+                    </div>
+                </div>
+                <div class="mt-8 pt-4 border-t border-slate-100">
+                    <a 
+                        href="/chat" 
+                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors duration-150"
+                    >
+                        <span>Iniciar Conversación</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

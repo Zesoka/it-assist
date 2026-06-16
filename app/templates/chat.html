@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Agente IA IT{% endblock %}
+{% block header_title %}Agente de Inteligencia Artificial IT (Gemini){% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Estilos del indicador de escritura de la IA */
+    .htmx-indicator {
+        display: none !important;
+    }
+    .htmx-request .htmx-indicator,
+    .htmx-request.htmx-indicator {
+        display: flex !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 flex flex-col min-h-[calc(100vh-10rem)]">
+    
+    <!-- Cabecera Informativa y Acción de Limpiar Historial -->
+    <div class="bg-white border border-slate-100 rounded-2xl p-5 custom-shadow flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center text-lg">
+                <i class="fa-solid fa-robot"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-slate-900">Ingeniero Senior IT</h3>
+                <p class="text-xs text-slate-500 font-medium">Especialista en Proxmox, FortiGate, Aruba, UniFi y Linux</p>
+            </div>
+        </div>
+        
+        <!-- Botón para Vaciar Historial -->
+        <button 
+            hx-delete="/chat/clear"
+            hx-target="#chat-messages"
+            hx-swap="outerHTML"
+            hx-confirm="¿Está seguro de que desea limpiar el historial de la conversación?"
+            class="px-3.5 py-2 bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200/50 rounded-xl text-xs font-semibold transition-all duration-150 flex items-center gap-1.5"
+        >
+            <i class="fa-solid fa-trash-can text-xs"></i>
+            <span>Limpiar Chat</span>
+        </button>
+    </div>
+
+    <!-- Área de Chat Principal -->
+    <div class="flex-1 bg-white border border-slate-100 rounded-2xl custom-shadow flex flex-col min-h-[400px] overflow-hidden">
+        
+        <!-- Contenedor de Mensajes -->
+        <div 
+            id="chat-messages" 
+            class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 border-b border-slate-100 max-h-[500px]"
+            style="scroll-behavior: smooth;"
+        >
+            <!-- Mensaje de bienvenida inicial si no hay historial -->
+            {% if not history %}
+            <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5 max-w-2xl text-slate-800 text-sm leading-relaxed space-y-2 animate-in fade-in duration-200">
+                <p class="font-bold text-blue-900 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Soporte de Inteligencia Artificial IT</span>
+                </p>
+                <p>
+                    Hola, soy tu colega virtual en Infraestructura IT. Estoy listo para ayudarte con comandos exactos, diagnósticos de red y configuraciones de switches, clústeres de Proxmox y políticas de FortiGate en el entorno de salud.
+                </p>
+                <p class="text-xs text-blue-700/80 font-medium">
+                    Prueba haciendo clic en las plantillas de abajo para ver cómo puedo responderte.
+                </p>
+            </div>
+            {% else %}
+                {% for msg in history %}
+                    {% if msg.role == 'user' %}
+                    <!-- Mensaje del Usuario -->
+                    <div class="flex justify-end animate-in fade-in duration-150">
+                        <div class="bg-brand-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 max-w-xl text-sm font-medium">
+                            {{ msg.text }}
+                        </div>
+                    </div>
+                    {% else %}
+                    <!-- Respuesta del Asistente (Jinja2 renderiza HTML seguro) -->
+                    <div class="flex justify-start animate-in fade-in duration-150">
+                        <div class="bg-white text-slate-800 rounded-2xl rounded-tl-none px-4 py-3 max-w-2xl text-sm leading-relaxed border border-slate-200 shadow-sm">
+                            {{ msg.text|safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            
+            <!-- Indicador de Carga (Escribiendo...) -->
+            <div id="chat-loading-indicator" class="htmx-indicator flex justify-start animate-in fade-in duration-150">
+                <div class="bg-slate-200/60 text-slate-500 rounded-2xl rounded-tl-none px-4 py-3 max-w-xs flex items-center gap-2.5 text-xs font-semibold">
+                    <div class="flex space-x-1">
+                        <div class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                        <div class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                        <div class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
+                    </div>
+                    <span>Analizando diagnóstico...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sugerencias de Consultas Rápidas (Pills) -->
+        <div class="p-4 bg-slate-50/50 border-b border-slate-100 flex flex-wrap gap-2 shrink-0">
+            <button 
+                onclick="setPrompt('¿Cómo restauro un quórum de clúster en Proxmox VE cuando se cae un nodo y tengo 2 nodos en total?')"
+                class="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+                <i class="fa-solid fa-server mr-1 text-violet-500"></i> Quórum Proxmox
+            </button>
+            <button 
+                onclick="setPrompt('Bríndame los comandos de CLI para configurar una nueva VLAN en un switch Aruba de accesos.')"
+                class="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+                <i class="fa-solid fa-network-wired mr-1 text-brand-500"></i> VLAN Aruba
+            </button>
+            <button 
+                onclick="setPrompt('¿Cuáles son los pasos para configurar SD-WAN Link Health Monitor en un FortiGate desde CLI?')"
+                class="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+                <i class="fa-solid fa-shield-halved mr-1 text-rose-500"></i> SD-WAN FortiGate
+            </button>
+            <button 
+                onclick="setPrompt('Escribe un script en Bash para limpiar logs de systemd journald en Ubuntu Server que libere espacio en disco.')"
+                class="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+                <i class="fa-brands fa-linux mr-1 text-slate-700"></i> Limpieza Linux
+            </button>
+        </div>
+
+        <!-- Formulario de Entrada de Mensaje -->
+        <div class="p-4 bg-white shrink-0">
+            <form 
+                hx-post="/chat/message" 
+                hx-target="#chat-messages" 
+                hx-swap="beforeend"
+                hx-indicator="#chat-loading-indicator"
+                hx-on::after-request="this.reset(); scrollChatToBottom();"
+                class="flex gap-3"
+            >
+                <input 
+                    type="text" 
+                    id="message-input" 
+                    name="message" 
+                    placeholder="Escribe tu consulta sobre infraestructura o soporte..."
+                    required
+                    autocomplete="off"
+                    class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition-all duration-150"
+                >
+                <button 
+                    type="submit" 
+                    class="px-5 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white rounded-xl font-bold text-sm transition-colors duration-150 flex items-center justify-center gap-2 hover:scale-[1.01]"
+                >
+                    <span>Enviar</span>
+                    <i class="fa-solid fa-paper-plane text-xs"></i>
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Función para deslizar el chat hasta abajo automáticamente
+    function scrollChatToBottom() {
+        const chatBox = document.getElementById('chat-messages');
+        if (chatBox) {
+            chatBox.scrollTo({
+                top: chatBox.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    }
+
+    // Escribir el prompt sugerido en el input
+    function setPrompt(text) {
+        const input = document.getElementById('message-input');
+        if (input) {
+            input.value = text;
+            input.focus();
+        }
+    }
+
+    // Scroll al cargar la página si ya hay historial
+    window.addEventListener('load', () => {
+        setTimeout(scrollChatToBottom, 100);
+    });
+</script>
+{% endblock %}

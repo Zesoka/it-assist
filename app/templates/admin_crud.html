@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Técnicos{% endblock %}
+{% block header_title %}Administración de Personal de Soporte{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+    <!-- Grid: Formulario de Creación y Listado de Usuarios -->
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-8">
+        
+        <!-- Formulario para Registrar Nuevo Técnico (1 columna en pantallas XL) -->
+        <div class="xl:col-span-1 bg-white border border-slate-100 rounded-2xl p-6 custom-shadow h-fit">
+            <h3 class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+                <i class="fa-solid fa-user-plus text-brand-600 text-sm"></i>
+                <span>Registrar Técnico</span>
+            </h3>
+
+            <!-- El formulario usa HTMX para postear e inyectar el cuerpo de la tabla actualizado -->
+            <form 
+                hx-post="/admin/users" 
+                hx-target="#user-table-body" 
+                hx-swap="innerHTML"
+                hx-on::after-request="this.reset()"
+                class="space-y-4"
+            >
+                <div>
+                    <label for="username" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Usuario de Red</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        placeholder="ej. jgarcia"
+                        required
+                        class="block w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition-all duration-150"
+                    >
+                </div>
+
+                <div>
+                    <label for="full_name" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nombre Completo</label>
+                    <input 
+                        type="text" 
+                        id="full_name" 
+                        name="full_name" 
+                        placeholder="ej. Juan Garcia"
+                        required
+                        class="block w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition-all duration-150"
+                    >
+                </div>
+
+                <div>
+                    <label for="password" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contraseña Inicial</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        placeholder="Min. 4 caracteres"
+                        required
+                        class="block w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition-all duration-150"
+                    >
+                </div>
+
+                <div>
+                    <label for="role" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Rol en Sistema</label>
+                    <select 
+                        id="role" 
+                        name="role" 
+                        class="block w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition-all duration-150"
+                    >
+                        <option value="tecnico" selected>Técnico de Soporte</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+
+                <div class="pt-2">
+                    <button 
+                        type="submit" 
+                        class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-semibold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-2"
+                    >
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Registrar Técnico</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tabla de Listado de Técnicos (3 columnas en pantallas XL) -->
+        <div class="xl:col-span-3 bg-white border border-slate-100 rounded-2xl p-6 custom-shadow h-fit">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-users text-brand-600 text-sm"></i>
+                    <span>Técnicos Registrados</span>
+                </h3>
+                <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Modificación en Caliente (HTMX)</span>
+            </div>
+
+            <!-- Contenedor para notificaciones de acción (opcional) -->
+            <div id="crud-alert" class="hidden"></div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-100 text-sm">
+                    <thead>
+                        <tr class="text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            <th class="pb-3 pl-4">ID</th>
+                            <th class="pb-3">Nombre Completo</th>
+                            <th class="pb-3">Usuario de Red</th>
+                            <th class="pb-3">Rol</th>
+                            <th class="pb-3">Estado</th>
+                            <th class="pb-3 pr-4 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    
+                    <!-- Cuerpo de la Tabla (parcial que se reemplazará al agregar/editar) -->
+                    <tbody id="user-table-body" class="divide-y divide-slate-50 font-medium">
+                        {% include "partials/user_table_body.html" %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Contenedor para Modales Dinámicos (Inyectados por HTMX) -->
+<div id="modal-container"></div>
+
+<script>
+    // Limpieza o controles de UI tras respuestas exitosas si hiciera falta
+    document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+        // En caso de querer cerrar modales u otras acciones personalizadas
+    });
+</script>
+{% endblock %}
