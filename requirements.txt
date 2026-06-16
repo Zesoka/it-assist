@@ -2,7 +2,7 @@ fastapi==0.111.0
 uvicorn==0.30.1
 gunicorn==22.0.0
 sqlalchemy==2.0.31
-# psycopg2-binary==2.9.9 # Descomentar para producción (LXC Linux). Comentado en Windows para desarrollo local con SQLite.
+psycopg2-binary==2.9.9 # Descomentar para producción (LXC Linux). Comentado en Windows para desarrollo local con SQLite.
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
 jinja2==3.1.4
