@@ -72,6 +72,8 @@ def clean_text_for_pdf(text: str) -> str:
     }
     for orig, rep in replacements.items():
         text = text.replace(orig, rep)
+    # Reemplazar tabulaciones por espacios para evitar fallos de cálculo de ancho
+    text = text.replace('\t', '    ')
     # Codificar en latin-1 descartando caracteres no mapeables
     return text.encode('latin-1', 'replace').decode('latin-1')
 
@@ -303,13 +305,13 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
     class PDF(FPDF):
         def header(self):
             self.set_font('Helvetica', 'B', 10)
-            self.cell(0, 10, 'Reporte de Transcripcion - Soporte IT', border=False, align='R')
+            self.cell(self.epw, 10, 'Reporte de Transcripcion - Soporte IT', border=False, align='R')
             self.ln(10)
             
         def footer(self):
             self.set_y(-15)
             self.set_font('Helvetica', 'I', 8)
-            self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}}', align='C')
+            self.cell(self.epw, 10, f'Pagina {self.page_no()}/{{nb}}', align='C')
             
     pdf = PDF()
     pdf.alias_nb_pages()
@@ -317,14 +319,14 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
     
     # Título principal
     pdf.set_font('Helvetica', 'B', 14)
-    pdf.multi_cell(0, 8, clean_text_for_pdf(title))
+    pdf.multi_cell(pdf.epw, 8, clean_text_for_pdf(title))
     pdf.ln(4)
     
     # Metadatos
     pdf.set_font('Helvetica', 'I', 9)
-    pdf.cell(0, 6, clean_text_for_pdf(f"URL: {url}"))
+    pdf.cell(pdf.epw, 6, clean_text_for_pdf(f"URL: {url}"))
     pdf.ln(6)
-    pdf.cell(0, 6, clean_text_for_pdf(f"Video ID: {video_id}"))
+    pdf.cell(pdf.epw, 6, clean_text_for_pdf(f"Video ID: {video_id}"))
     pdf.ln(6)
     
     lines = markdown_content.splitlines()
@@ -342,7 +344,7 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
             
         if in_code_block:
             pdf.set_font('Courier', '', 9)
-            pdf.multi_cell(0, 5, clean_text_for_pdf(line))
+            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(line))
             continue
             
         pdf.set_font('Helvetica', '', 10)
@@ -350,25 +352,25 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
         if stripped.startswith("# "):
             pdf.ln(4)
             pdf.set_font('Helvetica', 'B', 14)
-            pdf.multi_cell(0, 7, clean_text_for_pdf(stripped[2:]))
+            pdf.multi_cell(pdf.epw, 7, clean_text_for_pdf(stripped[2:]))
             pdf.ln(2)
         elif stripped.startswith("## "):
             pdf.ln(3)
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.multi_cell(0, 6, clean_text_for_pdf(stripped[3:]))
+            pdf.multi_cell(pdf.epw, 6, clean_text_for_pdf(stripped[3:]))
             pdf.ln(1.5)
         elif stripped.startswith("### "):
             pdf.ln(2)
             pdf.set_font('Helvetica', 'B', 11)
-            pdf.multi_cell(0, 6, clean_text_for_pdf(stripped[4:]))
+            pdf.multi_cell(pdf.epw, 6, clean_text_for_pdf(stripped[4:]))
             pdf.ln(1)
         elif stripped.startswith("- ") or stripped.startswith("* "):
-            pdf.multi_cell(0, 5, clean_text_for_pdf(f"o {stripped[2:]}"))
+            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(f"o {stripped[2:]}"))
         elif re.match(r'^\d+\.\s+', stripped):
-            pdf.multi_cell(0, 5, clean_text_for_pdf(stripped))
+            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(stripped))
         else:
             clean_line = line.replace("**", "").replace("__", "")
-            pdf.multi_cell(0, 5, clean_text_for_pdf(clean_line))
+            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(clean_line))
             
     pdf.output(filepath)
     return filepath
