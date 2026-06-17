@@ -1,4 +1,4 @@
-# Portal de Soporte e Infraestructura IT - Sanatorio Digital
+# Portal de Soporte e Infraestructura IT
 
 Este es un portal web corporativo de uso interno diseñado para equipos de soporte técnico, administración de redes e infraestructura de IT en el sector salud. La aplicación está optimizada para ser alojada en un contenedor LXC (Ubuntu 24.04 LTS) sobre un hipervisor Proxmox VE, accesible exclusivamente a través de la Intranet corporativa.
 
