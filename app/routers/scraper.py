@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, status, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ import os
 import re
 import tempfile
 import time
+import uuid
 from typing import List, Dict, Any
 
 import yt_dlp
@@ -378,13 +379,83 @@ async def get_scraper_page(request: Request, current_user: User = Depends(get_cu
         {"request": request, "user": current_user}
     )
 
+# Diccionario global para el estado de las tareas de transcripción en segundo plano
+transcription_tasks: Dict[str, Dict[str, Any]] = {}
+
+def bg_process_transcription(task_id: str, video_url: str, video_id: str):
+    """Tarea ejecutada en segundo plano para procesar el video sin bloquear el servidor web"""
+    try:
+        # 1. Obtener título del video
+        transcription_tasks[task_id] = {
+            "status": "processing",
+            "message": "Obteniendo información del video desde YouTube..."
+        }
+        title = get_video_title(video_url, video_id)
+        
+        # 2. Descargar flujo de audio
+        transcription_tasks[task_id] = {
+            "status": "processing",
+            "message": "Descargando flujo de audio optimizado (m4a)..."
+        }
+        audio_path = download_audio_via_ytdlp(video_id)
+        
+        # 3. Transcribir y formatear con Gemini
+        transcription_tasks[task_id] = {
+            "status": "processing",
+            "message": "Subiendo audio y transcribiendo con Gemini AI (esto puede tardar)..."
+        }
+        try:
+            markdown_content = transcribe_and_format_audio(audio_path, title, video_url)
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+                
+        if not markdown_content:
+            raise Exception("No se pudo obtener la transcripción formateada de Gemini.")
+            
+        # 4. Generar archivos
+        transcription_tasks[task_id] = {
+            "status": "processing",
+            "message": "Generando documentos exportables (Markdown, Word, PDF)..."
+        }
+        md_path = generate_markdown_from_content(video_id, title, video_url, markdown_content)
+        docx_path = generate_docx_from_markdown(video_id, title, video_url, markdown_content)
+        pdf_path = generate_pdf_from_markdown(video_id, title, video_url, markdown_content)
+        
+        md_file = os.path.basename(md_path)
+        docx_file = os.path.basename(docx_path)
+        pdf_file = os.path.basename(pdf_path)
+        
+        transcription_tasks[task_id] = {
+            "status": "completed",
+            "result": {
+                "title": title,
+                "video_id": video_id,
+                "md_file": md_file,
+                "docx_file": docx_file,
+                "pdf_file": pdf_file
+            }
+        }
+    except Exception as e:
+        error_msg = str(e)
+        if "Subtitles are disabled" in error_msg or "Could not find a transcript" in error_msg:
+            friendly_error = "El video no tiene subtítulos o transcripciones disponibles para este ID."
+        else:
+            friendly_error = f"Error al procesar el video: {error_msg}"
+            
+        transcription_tasks[task_id] = {
+            "status": "failed",
+            "error": friendly_error
+        }
+
 @router.post("/process", response_class=HTMLResponse)
 async def process_youtube_url(
     request: Request,
+    background_tasks: BackgroundTasks,
     video_url: str = Form(...),
     current_user: User = Depends(get_current_user)
 ):
-    """Procesa el video, descarga la transcripción y genera los archivos en segundo plano"""
+    """Inicia el procesamiento del video en segundo plano y retorna de inmediato el spinner de polling"""
     video_url = video_url.strip()
     if not video_url:
         return templates.TemplateResponse(
@@ -400,57 +471,89 @@ async def process_youtube_url(
             {"request": request, "error": str(e)}
         )
 
-    try:
-        # 1. Obtener título del video (rápido vía yt-dlp)
-        title = get_video_title(video_url, video_id)
-        
-        # 2. Descargar flujo de audio
-        audio_path = download_audio_via_ytdlp(video_id)
-        
-        # 3. Transcribir y formatear inteligentemente con Gemini
-        try:
-            markdown_content = transcribe_and_format_audio(audio_path, title, video_url)
-        finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
-                
-        if not markdown_content:
-            raise Exception("No se pudo obtener la transcripción formateada de Gemini.")
-            
-        # 4. Generar archivos
-        md_path = generate_markdown_from_content(video_id, title, video_url, markdown_content)
-        docx_path = generate_docx_from_markdown(video_id, title, video_url, markdown_content)
-        pdf_path = generate_pdf_from_markdown(video_id, title, video_url, markdown_content)
-        
-        # Obtener los nombres de archivo para pasarlos al frontend
-        md_file = os.path.basename(md_path)
-        docx_file = os.path.basename(docx_path)
-        pdf_file = os.path.basename(pdf_path)
+    task_id = str(uuid.uuid4())
+    transcription_tasks[task_id] = {
+        "status": "pending",
+        "message": "Inicializando transcripción en segundo plano..."
+    }
+    
+    # Iniciar la tarea en segundo plano sin bloquear el request
+    background_tasks.add_task(bg_process_transcription, task_id, video_url, video_id)
+    
+    # Retornar inmediatamente un spinner que hace polling cada 3 segundos a la ruta de estado
+    return HTMLResponse(
+        content=f"""
+        <div class="p-6 bg-white border border-slate-100 rounded-2xl custom-shadow flex flex-col items-center justify-center space-y-4 text-center"
+             hx-get="/scraper/status/{task_id}" 
+             hx-trigger="every 3s" 
+             hx-target="#scraper-results-container" 
+             hx-swap="innerHTML">
+            <div class="relative w-12 h-12 flex items-center justify-center">
+                <div class="absolute w-12 h-12 border-4 border-brand-100 rounded-full"></div>
+                <div class="absolute w-12 h-12 border-4 border-t-brand-600 rounded-full animate-spin"></div>
+            </div>
+            <div>
+                <span class="block text-sm font-bold text-slate-800">Iniciando proceso en segundo plano...</span>
+                <span class="block text-xs text-slate-400 mt-1">Este proceso se ejecuta asíncronamente para evitar cortes por timeout. Puedes esperar aquí.</span>
+            </div>
+        </div>
+        """
+    )
 
+@router.get("/status/{task_id}", response_class=HTMLResponse)
+async def get_task_status(
+    request: Request,
+    task_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Endpoint de polling para comprobar el estado de una tarea y actualizar la UI mediante HTMX"""
+    task = transcription_tasks.get(task_id)
+    if not task:
+        return HTMLResponse(
+            content="<div class='p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-sm font-semibold'>Tarea no encontrada o expirada.</div>"
+        )
+        
+    status_val = task.get("status")
+    
+    if status_val in ["pending", "processing"]:
+        message = task.get("message", "Procesando...")
+        return HTMLResponse(
+            content=f"""
+            <div class="p-6 bg-white border border-slate-100 rounded-2xl custom-shadow flex flex-col items-center justify-center space-y-4 text-center"
+                 hx-get="/scraper/status/{task_id}" 
+                 hx-trigger="every 3s" 
+                 hx-target="#scraper-results-container" 
+                 hx-swap="innerHTML">
+                <div class="relative w-12 h-12 flex items-center justify-center">
+                    <div class="absolute w-12 h-12 border-4 border-brand-100 rounded-full"></div>
+                    <div class="absolute w-12 h-12 border-4 border-t-brand-600 rounded-full animate-spin"></div>
+                </div>
+                <div>
+                    <span class="block text-sm font-bold text-slate-800">{message}</span>
+                    <span class="block text-xs text-slate-400 mt-1">Procesando de forma segura sin límites de tiempo en el servidor...</span>
+                </div>
+            </div>
+            """
+        )
+    elif status_val == "completed":
+        res = task.get("result", {})
         return templates.TemplateResponse(
             "partials/scraper_results.html",
             {
                 "request": request,
-                "title": title,
-                "video_id": video_id,
-                "md_file": md_file,
-                "docx_file": docx_file,
-                "pdf_file": pdf_file,
+                "title": res.get("title"),
+                "video_id": res.get("video_id"),
+                "md_file": res.get("md_file"),
+                "docx_file": res.get("docx_file"),
+                "pdf_file": res.get("pdf_file"),
                 "success": True
             }
         )
-
-    except Exception as e:
-        # Errores comunes: No hay subtítulos habilitados, video privado, etc.
-        error_msg = str(e)
-        if "Subtitles are disabled" in error_msg or "Could not find a transcript" in error_msg:
-            friendly_error = "El video no tiene subtítulos o transcripciones disponibles para este ID."
-        else:
-            friendly_error = f"Error al procesar el video: {error_msg}"
-            
+    else: # failed
+        error_msg = task.get("error", "Error desconocido.")
         return templates.TemplateResponse(
             "partials/scraper_results.html",
-            {"request": request, "error": friendly_error}
+            {"request": request, "error": error_msg}
         )
 
 @router.get("/download/{filename}")
