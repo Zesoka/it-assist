@@ -2,18 +2,10 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-import google.generativeai as genai
-from typing import List, Dict, Any
-
-from app.config import settings
-from app.database import get_db
-from app.auth import get_current_user
-from app.models import User
-
-import google.generativeai as genai
-from typing import List, Dict, Any
+import httpx
 import re
 import html
+from typing import List, Dict, Any
 
 from app.config import settings
 from app.database import get_db
@@ -132,25 +124,45 @@ async def send_message(
     # Para enviarle el historial plano a Gemini, guardamos una versión plana en sesión
     chat_history_raw = request.session.get("chat_history_raw", [])
     
-    # 2. Formatear historial plano para el SDK de Gemini
+    # 2. Formatear historial plano para la API REST de Gemini
     gemini_history = []
     for msg in chat_history_raw:
         gemini_history.append({
             "role": "user" if msg["role"] == "user" else "model",
-            "parts": [msg["text"]]
+            "parts": [{"text": msg["text"]}]
         })
+    
+    # Agregar el mensaje actual del usuario al historial para la consulta
+    gemini_history.append({
+        "role": "user",
+        "parts": [{"text": message}]
+    })
 
     try:
-        # 3. Inicializar el modelo con el prompt del sistema
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=SYSTEM_PROMPT
-        )
+        # 3. Consultar a la API REST de Gemini directamente para evitar fallos de descubrimiento en claves AQ.
+        gen_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+        payload = {
+            "contents": gemini_history,
+            "systemInstruction": {
+                "parts": [{"text": SYSTEM_PROMPT}]
+            }
+        }
         
-        # 4. Iniciar chat con historial e interactuar
-        chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(message)
-        response_raw_text = response.text
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(gen_url, json=payload)
+            if response.status_code != 200:
+                raise Exception(f"Fallo en la llamada a Gemini REST: {response.status_code} - {response.text}")
+                
+            result = response.json()
+            candidates = result.get("candidates", [])
+            if not candidates:
+                raise Exception("No se recibió respuesta del modelo Gemini.")
+                
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if not parts:
+                raise Exception("No se recibió contenido de texto de Gemini.")
+                
+            response_raw_text = parts[0].get("text", "")
         
         # 5. Formatear la respuesta raw a HTML para renderizar
         response_html = format_markdown_to_html(response_raw_text)
