@@ -117,7 +117,7 @@ def transcribe_and_format_audio(filepath: str, title: str, url: str) -> str:
     }
     json_data = {"file": {"display_name": filename}}
     
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=600.0) as client:
         response = client.post(init_url, headers=headers, json=json_data)
         if response.status_code != 200:
             raise Exception(f"Fallo al iniciar carga en Gemini: {response.status_code} - {response.text}")
