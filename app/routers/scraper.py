@@ -5,16 +5,24 @@ from sqlalchemy.orm import Session
 import os
 import re
 import tempfile
+import time
 from typing import List, Dict, Any
 
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from docx import Document
+from docx.shared import Inches
 from fpdf import FPDF
+import google.generativeai as genai
 
 from app.database import get_db
 from app.auth import get_current_user
 from app.models import User
+from app.config import settings
+
+# Configurar la API Key de Gemini
+if settings.GEMINI_API_KEY:
+    genai.configure(api_key=settings.GEMINI_API_KEY)
 
 router = APIRouter(prefix="/scraper", tags=["YouTube Scraper"])
 templates = Jinja2Templates(directory="app/templates")
@@ -64,144 +72,155 @@ def clean_text_for_pdf(text: str) -> str:
     # Codificar en latin-1 descartando caracteres no mapeables
     return text.encode('latin-1', 'replace').decode('latin-1')
 
-def parse_vtt(vtt_content: str) -> List[Dict[str, Any]]:
-    """Parsea un archivo VTT y retorna la transcripción en formato estructurado"""
-    transcript = []
-    pattern = r'(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{3})\s+-->\s+(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{3})'
-    
-    lines = vtt_content.splitlines()
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        match = re.match(pattern, line)
-        if match:
-            hours = int(match.group(1)) if match.group(1) else 0
-            minutes = int(match.group(2))
-            seconds = int(match.group(3))
-            ms = int(match.group(4))
-            start_sec = hours * 3600 + minutes * 60 + seconds + ms / 1000.0
-            
-            i += 1
-            text_lines = []
-            while i < len(lines) and lines[i].strip() != "" and not re.match(pattern, lines[i].strip()):
-                clean_line = re.sub(r'<[^>]+>', '', lines[i].strip())
-                if clean_line:
-                    text_lines.append(clean_line)
-                i += 1
-            
-            if text_lines:
-                transcript.append({
-                    'start': start_sec,
-                    'text': " ".join(text_lines)
-                })
-            continue
-        i += 1
-        
-    return transcript
-
-def get_transcript_via_ytdlp(video_id: str) -> List[Dict[str, Any]]:
-    """Descarga y parsea subtítulos/capturas usando yt-dlp como fallback"""
-    import tempfile
+def download_audio_via_ytdlp(video_id: str) -> str:
+    """Descarga el audio de un video de YouTube como archivo m4a de forma optimizada sin requerir ffmpeg"""
     url = f"https://www.youtube.com/watch?v={video_id}"
-    with tempfile.TemporaryDirectory() as tempdir:
-        ydl_opts = {
-            'skip_download': True,
-            'writesubtitles': True,
-            'writeautomaticsub': True,
-            'subtitleslangs': ['es.*', 'en.*'],
-            'ignore_no_formats_error': True,
-            'ignoreerrors': True,
-            'outtmpl': os.path.join(tempdir, '%(id)s'),
-            'quiet': True,
-            'no_warnings': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+    outtmpl = os.path.join(TEMP_DOWNLOADS_DIR, f"{video_id}.%(ext)s")
+    
+    ydl_opts = {
+        'format': '140/m4a/bestaudio/best', # AAC m4a estándar de YouTube (no requiere transcoder/ffmpeg)
+        'outtmpl': outtmpl,
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+        
+    for ext in ['m4a', 'webm', 'mp3', 'aac', 'ogg', 'wav']:
+        filepath = os.path.join(TEMP_DOWNLOADS_DIR, f"{video_id}.{ext}")
+        if os.path.exists(filepath):
+            return filepath
             
-        files = os.listdir(tempdir)
-        sub_file = None
-        for lang in ['es', 'en']:
-            for f in files:
-                if re.search(rf"\.{lang}(-[a-zA-Z0-9]+)?\.vtt$", f):
-                    sub_file = f
-                    break
-            if sub_file:
-                break
-                
-        if not sub_file:
-            for f in files:
-                if f.endswith(".vtt"):
-                    sub_file = f
-                    break
-                    
-        if not sub_file:
-            raise Exception("No se encontraron subtítulos ni transcripciones disponibles para este video.")
-            
-        filepath = os.path.join(tempdir, sub_file)
-        with open(filepath, "r", encoding="utf-8") as f:
-            vtt_content = f.read()
-            
-        return parse_vtt(vtt_content)
+    raise Exception("No se pudo descargar el archivo de audio del video.")
 
-def generate_markdown(video_id: str, title: str, url: str, transcript: List[Dict[str, Any]]) -> str:
-    """Genera archivo Markdown y retorna su ruta"""
+def transcribe_and_format_audio(filepath: str, title: str, url: str) -> str:
+    """Sube el archivo de audio a Gemini, realiza la transcripción y el formateo, y limpia el recurso remoto"""
+    if not settings.GEMINI_API_KEY:
+        raise Exception("GEMINI_API_KEY no está configurada en el servidor.")
+        
+    audio_file = genai.upload_file(path=filepath)
+    
+    try:
+        while audio_file.state.name == "PROCESSING":
+            time.sleep(2)
+            audio_file = genai.get_file(audio_file.name)
+            
+        if audio_file.state.name != "ACTIVE":
+            raise Exception(f"El procesamiento en Gemini falló con estado: {audio_file.state.name}")
+            
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        
+        prompt = (
+            "Analiza el siguiente audio de un video de soporte técnico/infraestructura. "
+            "Primero, realiza la transcripción completa de forma interna. "
+            "Luego, a partir de esa transcripción, genera un documento estructurado como un 'Instructivo Técnico' o 'Guía de Procedimiento Paso a Paso' en español. "
+            "El documento final debe incluir:\n"
+            "1. Un título descriptivo claro en formato de Encabezado de nivel 1 (#).\n"
+            "2. Un breve resumen del objetivo del instructivo.\n"
+            "3. Requisitos previos o herramientas necesarias (si las hay).\n"
+            "4. Los pasos ordenados secuencialmente, explicando detalladamente qué hacer. "
+            "Si en el audio se mencionan comandos exactos de terminal, configuraciones, switches de red, direcciones IP o sintaxis de código, "
+            "escríbelos exactamente dentro de bloques de código (```).\n"
+            "5. Notas o advertencias importantes sobre el procedimiento.\n\n"
+            "Por favor, genera únicamente el instructivo formateado en Markdown, sin textos introductorios adicionales."
+        )
+        
+        response = model.generate_content([audio_file, prompt])
+        return response.text
+        
+    finally:
+        try:
+            genai.delete_file(audio_file.name)
+        except Exception:
+            pass
+
+def generate_markdown_from_content(video_id: str, title: str, url: str, markdown_content: str) -> str:
+    """Guarda la transcripción formateada en formato Markdown (.md)"""
     filename = sanitize_filename(f"{title}_{video_id}") + ".md"
     filepath = os.path.join(TEMP_DOWNLOADS_DIR, filename)
     
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(f"# Transcripción: {title}\n\n")
-        f.write(f"- **URL del Video**: [{url}]({url})\n")
-        f.write(f"- **Video ID**: `{video_id}`\n\n")
-        f.write("## Contenido\n\n")
+        if not markdown_content.strip().startswith("# "):
+            f.write(f"# {title}\n\n")
+            f.write(f"- **URL del Video**: [{url}]({url})\n")
+            f.write(f"- **Video ID**: `{video_id}`\n\n")
+        f.write(markdown_content)
         
-        for item in transcript:
-            start_sec = int(item['start'])
-            minutes = start_sec // 60
-            seconds = start_sec % 60
-            timestamp = f"[{minutes:02d}:{seconds:02d}]"
-            f.write(f"**{timestamp}** {item['text']}\n\n")
-            
     return filepath
 
-def generate_docx(video_id: str, title: str, url: str, transcript: List[Dict[str, Any]]) -> str:
-    """Genera archivo Word (.docx) y retorna su ruta"""
+def generate_docx_from_markdown(video_id: str, title: str, url: str, markdown_content: str) -> str:
+    """Genera archivo Word (.docx) analizando el contenido estructurado del Markdown"""
     filename = sanitize_filename(f"{title}_{video_id}") + ".docx"
     filepath = os.path.join(TEMP_DOWNLOADS_DIR, filename)
     
     doc = Document()
     doc.add_heading(title, 0)
     
-    # Metadatos del documento
     p = doc.add_paragraph()
     p.add_run("URL del Video: ").bold = True
     p.add_run(url)
     p.add_run("\nID del Video: ").bold = True
     p.add_run(video_id)
     
-    doc.add_heading("Contenido de la Transcripción", level=1)
+    lines = markdown_content.splitlines()
+    in_code_block = False
+    code_content = []
     
-    for item in transcript:
-        start_sec = int(item['start'])
-        minutes = start_sec // 60
-        seconds = start_sec % 60
-        timestamp = f"[{minutes:02d}:{seconds:02d}]"
+    for line in lines:
+        stripped = line.strip()
         
-        tp = doc.add_paragraph()
-        tp.add_run(f"{timestamp} ").bold = True
-        tp.add_run(item['text'])
-        
+        if stripped.startswith("```"):
+            if in_code_block:
+                p_code = doc.add_paragraph()
+                p_code.paragraph_format.left_indent = Inches(0.5)
+                run = p_code.add_run("\n".join(code_content))
+                run.font.name = 'Courier New'
+                code_content = []
+                in_code_block = False
+            else:
+                in_code_block = True
+            continue
+            
+        if in_code_block:
+            code_content.append(line)
+            continue
+            
+        if stripped.startswith("# "):
+            doc.add_heading(stripped[2:], level=1)
+        elif stripped.startswith("## "):
+            doc.add_heading(stripped[3:], level=2)
+        elif stripped.startswith("### "):
+            doc.add_heading(stripped[4:], level=3)
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            doc.add_paragraph(stripped[2:], style='List Bullet')
+        elif re.match(r'^\d+\.\s+', stripped):
+            content = re.sub(r'^\d+\.\s+', '', stripped)
+            doc.add_paragraph(content, style='List Number')
+        elif stripped == "":
+            continue
+        else:
+            p_paragraph = doc.add_paragraph()
+            parts = re.split(r'(\*\*.*?\*\*)', line)
+            for part in parts:
+                if part.startswith("**") and part.endswith("**"):
+                    run = p_paragraph.add_run(part[2:-2])
+                    run.bold = True
+                else:
+                    p_paragraph.add_run(part)
+                    
     doc.save(filepath)
     return filepath
 
-def generate_pdf(video_id: str, title: str, url: str, transcript: List[Dict[str, Any]]) -> str:
-    """Genera archivo PDF utilizando FPDF y retorna su ruta"""
+def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_content: str) -> str:
+    """Genera archivo PDF usando FPDF analizando la estructura Markdown"""
     filename = sanitize_filename(f"{title}_{video_id}") + ".pdf"
     filepath = os.path.join(TEMP_DOWNLOADS_DIR, filename)
     
     class PDF(FPDF):
         def header(self):
-            self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, 'Reporte de Transcripcion - Soporte IT', border=False, align='C')
+            self.set_font('Helvetica', 'B', 10)
+            self.cell(0, 10, 'Reporte de Transcripcion - Soporte IT', border=False, align='R')
             self.ln(10)
             
         def footer(self):
@@ -215,27 +234,58 @@ def generate_pdf(video_id: str, title: str, url: str, transcript: List[Dict[str,
     
     # Título principal
     pdf.set_font('Helvetica', 'B', 14)
-    pdf.multi_cell(0, 10, clean_text_for_pdf(title))
-    pdf.ln(5)
+    pdf.multi_cell(0, 8, clean_text_for_pdf(title))
+    pdf.ln(4)
     
     # Metadatos
     pdf.set_font('Helvetica', 'I', 9)
     pdf.cell(0, 6, clean_text_for_pdf(f"URL: {url}"), ln=True)
     pdf.cell(0, 6, clean_text_for_pdf(f"Video ID: {video_id}"), ln=True)
-    pdf.ln(10)
+    pdf.ln(6)
     
-    # Transcripción
-    pdf.set_font('Helvetica', '', 10)
-    for item in transcript:
-        start_sec = int(item['start'])
-        minutes = start_sec // 60
-        seconds = start_sec % 60
-        timestamp = f"[{minutes:02d}:{seconds:02d}]"
+    lines = markdown_content.splitlines()
+    in_code_block = False
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped and not in_code_block:
+            pdf.ln(2)
+            continue
+            
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            continue
+            
+        if in_code_block:
+            pdf.set_font('Courier', '', 9)
+            pdf.multi_cell(0, 5, clean_text_for_pdf(line))
+            continue
+            
+        pdf.set_font('Helvetica', '', 10)
         
-        text_line = f"{timestamp} {item['text']}"
-        pdf.multi_cell(0, 6, clean_text_for_pdf(text_line))
-        pdf.ln(2)
-        
+        if stripped.startswith("# "):
+            pdf.ln(4)
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.multi_cell(0, 7, clean_text_for_pdf(stripped[2:]))
+            pdf.ln(2)
+        elif stripped.startswith("## "):
+            pdf.ln(3)
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.multi_cell(0, 6, clean_text_for_pdf(stripped[3:]))
+            pdf.ln(1.5)
+        elif stripped.startswith("### "):
+            pdf.ln(2)
+            pdf.set_font('Helvetica', 'B', 11)
+            pdf.multi_cell(0, 6, clean_text_for_pdf(stripped[4:]))
+            pdf.ln(1)
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            pdf.multi_cell(0, 5, clean_text_for_pdf(f"o {stripped[2:]}"))
+        elif re.match(r'^\d+\.\s+', stripped):
+            pdf.multi_cell(0, 5, clean_text_for_pdf(stripped))
+        else:
+            clean_line = line.replace("**", "").replace("__", "")
+            pdf.multi_cell(0, 5, clean_text_for_pdf(clean_line))
+            
     pdf.output(filepath)
     return filepath
 
@@ -273,58 +323,23 @@ async def process_youtube_url(
         # 1. Obtener título del video (rápido vía yt-dlp)
         title = get_video_title(video_url, video_id)
         
-        # 2. Descargar transcripción (idioma preferido: español, luego inglés)
-        transcript = None
+        # 2. Descargar flujo de audio
+        audio_path = download_audio_via_ytdlp(video_id)
+        
+        # 3. Transcribir y formatear inteligentemente con Gemini
         try:
-            try:
-                # API moderna (versión >= 0.6.2, requiere instanciación)
-                yt_api = YouTubeTranscriptApi()
-                transcript_list = yt_api.list(video_id)
-            except AttributeError:
-                # API antigua (versión < 0.6.2, métodos estáticos)
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            markdown_content = transcribe_and_format_audio(audio_path, title, video_url)
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
                 
-            try:
-                # Buscar español o inglés
-                transcript_obj = transcript_list.find_transcript(['es', 'en'])
-                fetched = transcript_obj.fetch()
-                transcript = fetched.to_raw_data()
-            except Exception:
-                # Intentar con el primer idioma disponible y traducir a español si es posible
-                first_transcript = next(iter(transcript_list))
-                try:
-                    fetched = first_transcript.translate('es').fetch()
-                    transcript = fetched.to_raw_data()
-                except Exception:
-                    fetched = first_transcript.fetch()
-                    transcript = fetched.to_raw_data()
-        except Exception as api_err:
-            # Fallback secundario directo si falla la lista
-            try:
-                try:
-                    yt_api = YouTubeTranscriptApi()
-                    fetched = yt_api.fetch(video_id)
-                except AttributeError:
-                    fetched = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'en'])
-                
-                if isinstance(fetched, list):
-                    transcript = fetched
-                else:
-                    transcript = fetched.to_raw_data()
-            except Exception as api_err2:
-                # Fallback terciario con yt-dlp
-                try:
-                    transcript = get_transcript_via_ytdlp(video_id)
-                except Exception as ytdlp_err:
-                    raise Exception(f"Fallo en youtube-transcript-api (error: {str(api_err)}) y en yt-dlp (error: {str(ytdlp_err)})")
-
-        if not transcript:
-            raise Exception("No se pudo recuperar ninguna transcripción para este video.")
-
-        # 3. Generar archivos asíncronos en servidor
-        md_path = generate_markdown(video_id, title, video_url, transcript)
-        docx_path = generate_docx(video_id, title, video_url, transcript)
-        pdf_path = generate_pdf(video_id, title, video_url, transcript)
+        if not markdown_content:
+            raise Exception("No se pudo obtener la transcripción formateada de Gemini.")
+            
+        # 4. Generar archivos
+        md_path = generate_markdown_from_content(video_id, title, video_url, markdown_content)
+        docx_path = generate_docx_from_markdown(video_id, title, video_url, markdown_content)
+        pdf_path = generate_pdf_from_markdown(video_id, title, video_url, markdown_content)
         
         # Obtener los nombres de archivo para pasarlos al frontend
         md_file = os.path.basename(md_path)
