@@ -303,36 +303,63 @@ def generate_docx_from_markdown(video_id: str, title: str, url: str, markdown_co
     return filepath
 
 def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_content: str) -> str:
-    """Genera archivo PDF usando FPDF analizando la estructura Markdown"""
+    """Genera un reporte PDF con diseño limpio, moderno y profesional, imitando el estilo de Instructivo Modelo"""
     filename = sanitize_filename(f"{title}_{video_id}") + ".pdf"
     filepath = os.path.join(TEMP_DOWNLOADS_DIR, filename)
     
     class PDF(FPDF):
         def header(self):
-            self.set_font('Helvetica', 'B', 10)
-            self.cell(self.epw, 10, 'Reporte de Transcripcion - Soporte IT', border=False, align='R')
-            self.ln(10)
+            # Línea sutil de encabezado
+            self.set_text_color(100, 116, 139) # slate-500
+            self.set_font('Helvetica', '', 8)
+            self.cell(self.epw / 2, 8, 'Instructivo de Asistencia Tecnica', border=False, align='L')
+            self.cell(self.epw / 2, 8, 'Plataforma de Soporte IT', border=False, align='R')
+            self.ln(6)
+            self.set_draw_color(226, 232, 240) # slate-200
+            self.set_line_width(0.2)
+            self.line(self.l_margin, self.t_margin + 6, self.w - self.r_margin, self.t_margin + 6)
+            self.ln(6)
             
         def footer(self):
             self.set_y(-15)
+            self.set_draw_color(226, 232, 240)
+            self.set_line_width(0.2)
+            self.line(self.l_margin, self.h - 15, self.w - self.r_margin, self.h - 15)
+            self.set_text_color(148, 163, 184) # slate-400
             self.set_font('Helvetica', 'I', 8)
-            self.cell(self.epw, 10, f'Pagina {self.page_no()}/{{nb}}', align='C')
+            self.cell(0, 10, f'Pagina {self.page_no()} de {{nb}}', align='C')
             
     pdf = PDF()
     pdf.alias_nb_pages()
     pdf.add_page()
     
-    # Título principal
-    pdf.set_font('Helvetica', 'B', 14)
-    pdf.multi_cell(pdf.epw, 8, clean_text_for_pdf(title))
-    pdf.ln(4)
+    # 1. Título del Documento (Verde corporativo / Slate oscuro)
+    pdf.set_font('Helvetica', 'B', 18)
+    pdf.set_text_color(15, 23, 42) # slate-900
+    pdf.multi_cell(pdf.epw, 9, clean_text_for_pdf(title))
+    pdf.ln(3)
     
-    # Metadatos
-    pdf.set_font('Helvetica', 'I', 9)
-    pdf.cell(pdf.epw, 6, clean_text_for_pdf(f"URL: {url}"))
-    pdf.ln(6)
-    pdf.cell(pdf.epw, 6, clean_text_for_pdf(f"Video ID: {video_id}"))
-    pdf.ln(6)
+    # 2. Metadatos de origen
+    pdf.set_font('Helvetica', '', 9)
+    pdf.set_text_color(100, 116, 139) # slate-500
+    
+    pdf.write(5, clean_text_for_pdf("Canal de Origen: YouTube  |  "))
+    pdf.write(5, clean_text_for_pdf("Video ID: "))
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.write(5, clean_text_for_pdf(video_id))
+    pdf.ln(5)
+    
+    pdf.set_font('Helvetica', '', 9)
+    pdf.write(5, clean_text_for_pdf("Enlace del Video: "))
+    pdf.set_text_color(16, 185, 129) # emerald-500
+    pdf.write(5, clean_text_for_pdf(url))
+    pdf.ln(10)
+    
+    # Línea divisoria decorativa verde
+    pdf.set_draw_color(16, 185, 129) # emerald-500
+    pdf.set_line_width(1.0)
+    pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+    pdf.ln(8)
     
     lines = markdown_content.splitlines()
     in_code_block = False
@@ -340,7 +367,7 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
     for line in lines:
         stripped = line.strip()
         if not stripped and not in_code_block:
-            pdf.ln(2)
+            pdf.ln(3)
             continue
             
         if stripped.startswith("```"):
@@ -349,31 +376,68 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
             
         if in_code_block:
             pdf.set_font('Courier', '', 9)
-            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(line))
+            pdf.set_text_color(30, 41, 59) # slate-800
+            pdf.set_fill_color(248, 250, 252) # slate-50 (fondo para bloque de código)
+            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(line), fill=True)
             continue
             
-        pdf.set_font('Helvetica', '', 10)
-        
+        # Títulos de nivel 1 (#)
         if stripped.startswith("# "):
-            pdf.ln(4)
-            pdf.set_font('Helvetica', 'B', 14)
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'B', 15)
+            pdf.set_text_color(16, 185, 129) # emerald-500 (Verde para secciones)
             pdf.multi_cell(pdf.epw, 7, clean_text_for_pdf(stripped[2:]))
-            pdf.ln(2)
-        elif stripped.startswith("## "):
             pdf.ln(3)
+            
+        # Títulos de nivel 2 (##)
+        elif stripped.startswith("## "):
+            pdf.ln(4)
             pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_text_color(15, 23, 42) # slate-900 (Negro para subsecciones)
             pdf.multi_cell(pdf.epw, 6, clean_text_for_pdf(stripped[3:]))
-            pdf.ln(1.5)
-        elif stripped.startswith("### "):
             pdf.ln(2)
+            
+        # Títulos de nivel 3 (###)
+        elif stripped.startswith("### "):
+            pdf.ln(3)
             pdf.set_font('Helvetica', 'B', 11)
-            pdf.multi_cell(pdf.epw, 6, clean_text_for_pdf(stripped[4:]))
-            pdf.ln(1)
+            pdf.set_text_color(71, 85, 105) # slate-600
+            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(stripped[4:]))
+            pdf.ln(1.5)
+            
+        # Viñetas no numeradas (- o *)
         elif stripped.startswith("- ") or stripped.startswith("* "):
-            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(f"o {stripped[2:]}"))
+            pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(51, 65, 85) # slate-700
+            content = stripped[2:]
+            # Reemplazar negritas Markdown **texto** en la viñeta
+            content_clean = content.replace("**", "").replace("__", "")
+            
+            # Dibujar un punto de viñeta decente
+            pdf.set_x(pdf.l_margin + 5)
+            # Carácter de viñeta estándar (en latin-1, \x95 es el bullet point o usamos un guión limpio)
+            bullet = chr(149) if hasattr(pdf, 'k') else "-"
+            pdf.write(5, f"{bullet}  ")
+            pdf.multi_cell(pdf.epw - 10, 5, clean_text_for_pdf(content_clean))
+            
+        # Lista numerada (ej. 1. o 2.)
         elif re.match(r'^\d+\.\s+', stripped):
-            pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(stripped))
+            pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(51, 65, 85) # slate-700
+            match = re.match(r'^(\d+\.\s+)(.*)', stripped)
+            if match:
+                num_part = match.group(1)
+                text_part = match.group(2).replace("**", "").replace("__", "")
+                pdf.set_x(pdf.l_margin + 2)
+                pdf.write(5, clean_text_for_pdf(num_part))
+                pdf.multi_cell(pdf.epw - 5, 5, clean_text_for_pdf(text_part))
+            else:
+                pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(stripped.replace("**", "")))
+                
+        # Párrafos normales
         else:
+            pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(51, 65, 85) # slate-700
             clean_line = line.replace("**", "").replace("__", "")
             pdf.multi_cell(pdf.epw, 5, clean_text_for_pdf(clean_line))
             
