@@ -14,6 +14,7 @@ from docx import Document
 from docx.shared import Inches
 from fpdf import FPDF
 import google.generativeai as genai
+import httpx
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -99,41 +100,121 @@ def transcribe_and_format_audio(filepath: str, title: str, url: str) -> str:
     if not settings.GEMINI_API_KEY:
         raise Exception("GEMINI_API_KEY no está configurada en el servidor.")
         
-    audio_file = genai.upload_file(path=filepath)
+    filename = os.path.basename(filepath)
+    filesize = os.path.getsize(filepath)
+    mime_type = "audio/mp4" # m4a es audio/mp4 o audio/x-m4a
     
-    try:
-        while audio_file.state.name == "PROCESSING":
-            time.sleep(2)
-            audio_file = genai.get_file(audio_file.name)
+    # 1. Iniciar la carga resumible
+    init_url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?key={settings.GEMINI_API_KEY}"
+    headers = {
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": str(filesize),
+        "X-Goog-Upload-Header-Content-Type": mime_type,
+        "Content-Type": "application/json",
+    }
+    json_data = {"file": {"display_name": filename}}
+    
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(init_url, headers=headers, json=json_data)
+        if response.status_code != 200:
+            raise Exception(f"Fallo al iniciar carga en Gemini: {response.status_code} - {response.text}")
             
-        if audio_file.state.name != "ACTIVE":
-            raise Exception(f"El procesamiento en Gemini falló con estado: {audio_file.state.name}")
+        upload_url = response.headers.get("X-Goog-Upload-URL")
+        if not upload_url:
+            raise Exception("No se recibió la URL de carga de Gemini.")
             
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        # 2. Subir los bytes del archivo
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+            
+        upload_headers = {
+            "Content-Length": str(filesize),
+            "X-Goog-Upload-Offset": "0",
+            "X-Goog-Upload-Command": "upload, finalize",
+        }
         
-        prompt = (
-            "Analiza el siguiente audio de un video de soporte técnico/infraestructura. "
-            "Primero, realiza la transcripción completa de forma interna. "
-            "Luego, a partir de esa transcripción, genera un documento estructurado como un 'Instructivo Técnico' o 'Guía de Procedimiento Paso a Paso' en español. "
-            "El documento final debe incluir:\n"
-            "1. Un título descriptivo claro en formato de Encabezado de nivel 1 (#).\n"
-            "2. Un breve resumen del objetivo del instructivo.\n"
-            "3. Requisitos previos o herramientas necesarias (si las hay).\n"
-            "4. Los pasos ordenados secuencialmente, explicando detalladamente qué hacer. "
-            "Si en el audio se mencionan comandos exactos de terminal, configuraciones, switches de red, direcciones IP o sintaxis de código, "
-            "escríbelos exactamente dentro de bloques de código (```).\n"
-            "5. Notas o advertencias importantes sobre el procedimiento.\n\n"
-            "Por favor, genera únicamente el instructivo formateado en Markdown, sin textos introductorios adicionales."
-        )
-        
-        response = model.generate_content([audio_file, prompt])
-        return response.text
-        
-    finally:
+        response_upload = client.post(upload_url, headers=upload_headers, content=file_data)
+        if response_upload.status_code != 200:
+            raise Exception(f"Fallo al cargar bytes a Gemini: {response_upload.status_code} - {response_upload.text}")
+            
+        metadata = response_upload.json()
+        file_resource_name = metadata.get("file", {}).get("name")
+        if not file_resource_name:
+            raise Exception("No se recibió el nombre del recurso de archivo de Gemini.")
+            
         try:
-            genai.delete_file(audio_file.name)
-        except Exception:
-            pass
+            # 3. Esperar a que el archivo se procese (ACTIVE)
+            file_info_url = f"https://generativelanguage.googleapis.com/v1beta/{file_resource_name}?key={settings.GEMINI_API_KEY}"
+            for _ in range(30):
+                info_resp = client.get(file_info_url)
+                if info_resp.status_code == 200:
+                    state = info_resp.json().get("state")
+                    if state == "ACTIVE":
+                        break
+                    elif state == "FAILED":
+                        raise Exception("El procesamiento del archivo falló en los servidores de Gemini.")
+                time.sleep(2)
+            else:
+                raise Exception("Tiempo de espera agotado para el procesamiento del archivo en Gemini.")
+                
+            # 4. Generar el contenido estructurado
+            gen_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            prompt = (
+                "Analiza el siguiente audio de un video de soporte técnico/infraestructura. "
+                "Primero, realiza la transcripción completa de forma interna. "
+                "Luego, a partir de esa transcripción, genera un documento estructurado como un 'Instructivo Técnico' o 'Guía de Procedimiento Paso a Paso' en español. "
+                "El documento final debe incluir:\n"
+                "1. Un título descriptivo claro en formato de Encabezado de nivel 1 (#).\n"
+                "2. Un breve resumen del objetivo del instructivo.\n"
+                "3. Requisitos previos o herramientas necesarias (si las hay).\n"
+                "4. Los pasos ordenados secuencialmente, explicando detalladamente qué hacer. "
+                "Si en el audio se mencionan comandos exactos de terminal, configuraciones, switches de red, direcciones IP o sintaxis de código, "
+                "escríbelos exactamente dentro de bloques de código (```).\n"
+                "5. Notas o advertencias importantes sobre el procedimiento.\n\n"
+                "Por favor, genera únicamente el instructivo formateado en Markdown, sin textos introductorios adicionales."
+            )
+            
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "file_data": {
+                                    "mime_type": mime_type,
+                                    "file_uri": f"https://generativelanguage.googleapis.com/v1beta/{file_resource_name}"
+                                }
+                            },
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            gen_resp = client.post(gen_url, json=payload, timeout=180.0)
+            if gen_resp.status_code != 200:
+                raise Exception(f"Fallo al generar contenido con Gemini: {gen_resp.status_code} - {gen_resp.text}")
+                
+            result = gen_resp.json()
+            candidates = result.get("candidates", [])
+            if not candidates:
+                raise Exception("No se recibió respuesta del modelo Gemini.")
+                
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if not parts:
+                raise Exception("No se recibió contenido de texto de Gemini.")
+                
+            return parts[0].get("text", "")
+            
+        finally:
+            # 5. Eliminar el archivo de la API de Gemini Files
+            try:
+                del_url = f"https://generativelanguage.googleapis.com/v1beta/{file_resource_name}?key={settings.GEMINI_API_KEY}"
+                client.delete(del_url)
+            except Exception:
+                pass
 
 def generate_markdown_from_content(video_id: str, title: str, url: str, markdown_content: str) -> str:
     """Guarda la transcripción formateada en formato Markdown (.md)"""
