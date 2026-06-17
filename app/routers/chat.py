@@ -15,9 +15,7 @@ from app.models import User
 router = APIRouter(prefix="/chat", tags=["IT AI Agent"])
 templates = Jinja2Templates(directory="app/templates")
 
-# Configurar la API Key de Gemini
-if settings.GEMINI_API_KEY:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+
 
 SYSTEM_PROMPT = (
     "Eres un ingeniero senior en Infraestructura IT operando en el sector salud. "
