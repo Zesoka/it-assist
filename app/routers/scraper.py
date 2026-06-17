@@ -322,8 +322,9 @@ def generate_pdf_from_markdown(video_id: str, title: str, url: str, markdown_con
     
     # Metadatos
     pdf.set_font('Helvetica', 'I', 9)
-    pdf.cell(0, 6, clean_text_for_pdf(f"URL: {url}"), ln=True)
-    pdf.cell(0, 6, clean_text_for_pdf(f"Video ID: {video_id}"), ln=True)
+    pdf.cell(0, 6, clean_text_for_pdf(f"URL: {url}"))
+    pdf.ln(6)
+    pdf.cell(0, 6, clean_text_for_pdf(f"Video ID: {video_id}"))
     pdf.ln(6)
     
     lines = markdown_content.splitlines()
