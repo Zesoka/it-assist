@@ -7,7 +7,8 @@ import re
 import tempfile
 import time
 import uuid
-from typing import List, Dict, Any
+import json
+from typing import List, Dict, Any, Optional
 
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -379,31 +380,48 @@ async def get_scraper_page(request: Request, current_user: User = Depends(get_cu
         {"request": request, "user": current_user}
     )
 
-# Diccionario global para el estado de las tareas de transcripción en segundo plano
-transcription_tasks: Dict[str, Dict[str, Any]] = {}
+def save_task_status(task_id: str, status_data: Dict[str, Any]):
+    """Guarda el estado de la tarea en un archivo JSON temporal para compartirlo entre workers de Gunicorn"""
+    filepath = os.path.join(TEMP_DOWNLOADS_DIR, f"task_{task_id}.json")
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(status_data, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+def get_task_status_data(task_id: str) -> Optional[Dict[str, Any]]:
+    """Lee el estado de la tarea desde el archivo JSON temporal"""
+    filepath = os.path.join(TEMP_DOWNLOADS_DIR, f"task_{task_id}.json")
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
 
 def bg_process_transcription(task_id: str, video_url: str, video_id: str):
     """Tarea ejecutada en segundo plano para procesar el video sin bloquear el servidor web"""
     try:
         # 1. Obtener título del video
-        transcription_tasks[task_id] = {
+        save_task_status(task_id, {
             "status": "processing",
             "message": "Obteniendo información del video desde YouTube..."
-        }
+        })
         title = get_video_title(video_url, video_id)
         
         # 2. Descargar flujo de audio
-        transcription_tasks[task_id] = {
+        save_task_status(task_id, {
             "status": "processing",
             "message": "Descargando flujo de audio optimizado (m4a)..."
-        }
+        })
         audio_path = download_audio_via_ytdlp(video_id)
         
         # 3. Transcribir y formatear con Gemini
-        transcription_tasks[task_id] = {
+        save_task_status(task_id, {
             "status": "processing",
             "message": "Subiendo audio y transcribiendo con Gemini AI (esto puede tardar)..."
-        }
+        })
         try:
             markdown_content = transcribe_and_format_audio(audio_path, title, video_url)
         finally:
@@ -414,10 +432,10 @@ def bg_process_transcription(task_id: str, video_url: str, video_id: str):
             raise Exception("No se pudo obtener la transcripción formateada de Gemini.")
             
         # 4. Generar archivos
-        transcription_tasks[task_id] = {
+        save_task_status(task_id, {
             "status": "processing",
             "message": "Generando documentos exportables (Markdown, Word, PDF)..."
-        }
+        })
         md_path = generate_markdown_from_content(video_id, title, video_url, markdown_content)
         docx_path = generate_docx_from_markdown(video_id, title, video_url, markdown_content)
         pdf_path = generate_pdf_from_markdown(video_id, title, video_url, markdown_content)
@@ -426,7 +444,7 @@ def bg_process_transcription(task_id: str, video_url: str, video_id: str):
         docx_file = os.path.basename(docx_path)
         pdf_file = os.path.basename(pdf_path)
         
-        transcription_tasks[task_id] = {
+        save_task_status(task_id, {
             "status": "completed",
             "result": {
                 "title": title,
@@ -435,7 +453,7 @@ def bg_process_transcription(task_id: str, video_url: str, video_id: str):
                 "docx_file": docx_file,
                 "pdf_file": pdf_file
             }
-        }
+        })
     except Exception as e:
         error_msg = str(e)
         if "Subtitles are disabled" in error_msg or "Could not find a transcript" in error_msg:
@@ -443,10 +461,10 @@ def bg_process_transcription(task_id: str, video_url: str, video_id: str):
         else:
             friendly_error = f"Error al procesar el video: {error_msg}"
             
-        transcription_tasks[task_id] = {
+        save_task_status(task_id, {
             "status": "failed",
             "error": friendly_error
-        }
+        })
 
 @router.post("/process", response_class=HTMLResponse)
 async def process_youtube_url(
@@ -472,10 +490,10 @@ async def process_youtube_url(
         )
 
     task_id = str(uuid.uuid4())
-    transcription_tasks[task_id] = {
+    save_task_status(task_id, {
         "status": "pending",
         "message": "Inicializando transcripción en segundo plano..."
-    }
+    })
     
     # Iniciar la tarea en segundo plano sin bloquear el request
     background_tasks.add_task(bg_process_transcription, task_id, video_url, video_id)
@@ -507,7 +525,7 @@ async def get_task_status(
     current_user: User = Depends(get_current_user)
 ):
     """Endpoint de polling para comprobar el estado de una tarea y actualizar la UI mediante HTMX"""
-    task = transcription_tasks.get(task_id)
+    task = get_task_status_data(task_id)
     if not task:
         return HTMLResponse(
             content="<div class='p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-sm font-semibold'>Tarea no encontrada o expirada.</div>"
