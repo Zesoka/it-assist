@@ -150,7 +150,7 @@ def transcribe_and_format_audio(filepath: str, title: str, url: str) -> str:
         try:
             # 3. Esperar a que el archivo se procese (ACTIVE)
             file_info_url = f"https://generativelanguage.googleapis.com/v1beta/{file_resource_name}?key={settings.GEMINI_API_KEY}"
-            for _ in range(30):
+            for _ in range(60):
                 info_resp = client.get(file_info_url)
                 if info_resp.status_code == 200:
                     state = info_resp.json().get("state")
@@ -202,7 +202,7 @@ def transcribe_and_format_audio(filepath: str, title: str, url: str) -> str:
                 ]
             }
             
-            gen_resp = client.post(gen_url, json=payload, timeout=180.0)
+            gen_resp = client.post(gen_url, json=payload, timeout=600.0)
             if gen_resp.status_code != 200:
                 raise Exception(f"Fallo al generar contenido con Gemini: {gen_resp.status_code} - {gen_resp.text}")
                 
