@@ -209,13 +209,28 @@ def transcribe_and_format_audio(filepath: str, title: str, url: str) -> str:
             result = gen_resp.json()
             candidates = result.get("candidates", [])
             if not candidates:
-                raise Exception("No se recibió respuesta del modelo Gemini.")
+                raise Exception(f"No se recibió respuesta del modelo Gemini. Respuesta completa de la API: {result}")
                 
-            parts = candidates[0].get("content", {}).get("parts", [])
+            candidate = candidates[0]
+            finish_reason = candidate.get("finishReason")
+            content = candidate.get("content", {})
+            parts = content.get("parts", [])
+            
             if not parts:
-                raise Exception("No se recibió contenido de texto de Gemini.")
+                err_detail = f"El modelo no generó texto. Motivo de finalización (finishReason): '{finish_reason}'."
+                if finish_reason == "SAFETY":
+                    err_detail += f" Bloqueado por filtros de seguridad. Clasificación de seguridad: {candidate.get('safetyRatings', [])}"
+                elif finish_reason == "RECITATION":
+                    err_detail += " Bloqueado por posible coincidencia con contenido con derechos de autor (recitación)."
+                else:
+                    err_detail += f" Respuesta completa: {result}"
+                raise Exception(err_detail)
                 
-            return parts[0].get("text", "")
+            text = parts[0].get("text", "")
+            if not text:
+                raise Exception(f"El contenido de texto de Gemini está vacío. Respuesta completa: {result}")
+                
+            return text
             
         finally:
             # 5. Eliminar el archivo de la API de Gemini Files
