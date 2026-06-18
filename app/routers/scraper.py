@@ -83,7 +83,7 @@ def download_audio_via_ytdlp(video_id: str) -> str:
     outtmpl = os.path.join(TEMP_DOWNLOADS_DIR, f"{video_id}.%(ext)s")
     
     ydl_opts = {
-        'format': '140/m4a/bestaudio/best', # AAC m4a estándar de YouTube (no requiere transcoder/ffmpeg)
+        'format': '139/140/m4a/bestaudio/best', # Preferir 48kbps (139) para máxima velocidad, fallback a 128kbps (140) o superior
         'outtmpl': outtmpl,
         'quiet': True,
         'no_warnings': True,
